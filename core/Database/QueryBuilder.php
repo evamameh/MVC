@@ -1,12 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
-
-
-
-
-
 
 namespace Core\Database;
 
@@ -26,7 +19,6 @@ final class QueryBuilder
         $this->pdo = $pdo;
     }
 
-    
     public function from(string $table): self
     {
         $copy = clone $this;
@@ -38,7 +30,6 @@ final class QueryBuilder
         return $copy;
     }
 
-    
     public function select(string ...$columns): self
     {
         $copy = clone $this;
@@ -47,7 +38,6 @@ final class QueryBuilder
         return $copy;
     }
 
-    
     public function where(string $column, mixed $value): self
     {
         $copy = clone $this;
@@ -55,7 +45,6 @@ final class QueryBuilder
 
         return $copy;
     }
-
     
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
@@ -65,8 +54,6 @@ final class QueryBuilder
 
         return $copy;
     }
-
-    
     
     public function get(): array
     {
@@ -76,8 +63,6 @@ final class QueryBuilder
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-    
     
     public function first(): ?array
     {
@@ -89,7 +74,6 @@ final class QueryBuilder
         return $row === false ? null : $row;
     }
 
-    
     public function count(): int
     {
         $sql = "SELECT COUNT(*) FROM {$this->table}";
@@ -109,8 +93,6 @@ final class QueryBuilder
         return (int) $stmt->fetchColumn();
     }
 
-    
-    
     public function insert(array $data): int|string
     {
         $cols = array_keys($data);
@@ -127,8 +109,6 @@ final class QueryBuilder
 
         return $this->pdo->lastInsertId();
     }
-
-    
     
     public function update(array $data): bool
     {
@@ -165,7 +145,6 @@ final class QueryBuilder
         return $stmt->execute($params);
     }
 
-    
     public function delete(): bool
     {
         if ($this->wheres === []) {
@@ -182,7 +161,6 @@ final class QueryBuilder
         return $stmt->execute($this->wheres);
     }
 
-    
     private function buildSelectSql(): string
     {
         if ($this->table === '') {
