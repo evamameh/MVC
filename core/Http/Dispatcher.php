@@ -1,11 +1,5 @@
 <?php
-
 declare(strict_types=1);
-
-
-
-
-
 
 namespace Core\Http;
 
@@ -48,8 +42,6 @@ final class Dispatcher
                 $middleware();
             }
         }
-
-        
         
         $controller = $this->container->get($match['controller']);
         $action = $match['action'];
