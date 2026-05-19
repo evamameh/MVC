@@ -1,11 +1,6 @@
 <?php
 declare(strict_types=1);
 
-
-
-
-
-
 namespace Core;
 
 use App\Controllers\CategoryController;
@@ -35,8 +30,6 @@ final class Application
 {
     
     private Container $container;
-
-    
     private string $basePath;
 
     private function __construct(Container $container, string $basePath)
