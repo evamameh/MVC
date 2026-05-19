@@ -36,7 +36,6 @@ final class Dispatcher
         }
 
         
-        
         foreach ($match['middleware'] as $middleware) {
             if (is_callable($middleware)) {
                 $middleware();

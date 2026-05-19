@@ -6,34 +6,28 @@ namespace App\Controllers;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\Product;
-use Core\Database\Connection;
 use Core\View\Engine;
 
 final class OrderController extends BaseController
 {
     private const ORDER_TYPES = ['purchase', 'sale', 'return'];
-    private const ORDER_TYPES_ADD = ['purchase', 'sale']; 
 
     private Order $orders;
     private Product $products;
     private Category $categories;
-    private Connection $connection;
 
     public function __construct(
         Engine $view,
         Order $orders,
         Product $products,
         Category $categories,
-        Connection $connection,
     ) {
         parent::__construct($view);
         $this->orders = $orders;
         $this->products = $products;
         $this->categories = $categories;
-        $this->connection = $connection;
     }
 
-    
     private static function inventoryDeltaWhenApplied(string $type, int $quantity): int
     {
         return match (strtolower(trim($type))) {
@@ -43,7 +37,6 @@ final class OrderController extends BaseController
         };
     }
 
-    
     private function stockAvailableForNewSale(array $existingOrder, int $productId): int
     {
         $row = $this->products->findById($productId);
@@ -55,26 +48,6 @@ final class OrderController extends BaseController
         return $stock - self::inventoryDeltaWhenApplied((string) ($existingOrder['type'] ?? ''), (int) ($existingOrder['quantity'] ?? 0));
     }
 
-    
-    private function withTransaction(callable $callback): mixed
-    {
-        $pdo = $this->connection->pdo();
-        $pdo->beginTransaction();
-
-        try {
-            $result = $callback();
-            $pdo->commit();
-
-            return $result;
-        } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            throw $e;
-        }
-    }
-
-    
     public function list(): void
     {
         $orders = $this->orders->findAll();
@@ -106,7 +79,6 @@ final class OrderController extends BaseController
         ]);
     }
 
-    
     public function add(): void
     {
         $viewData = [
@@ -134,14 +106,7 @@ final class OrderController extends BaseController
 
         if ($errors === []) {
             try {
-                $this->withTransaction(function () use ($type, $productId, $quantity): void {
-                    $this->orders->create([
-                        'type' => $type,
-                        'product_id' => $productId,
-                        'quantity' => $quantity,
-                    ]);
-                    $this->products->applyInventoryForOrderLine($type, $productId, $quantity, false);
-                });
+                $this->orders->createWithInventory($this->products, $type, $productId, $quantity);
                 $this->setFlash('success', 'Order saved successfully.');
                 $this->redirect('/order');
 
@@ -157,7 +122,6 @@ final class OrderController extends BaseController
         ]));
     }
 
-    
     public function edit(string $id): void
     {
         $order = $this->orders->findById($id);
@@ -207,27 +171,14 @@ final class OrderController extends BaseController
                 try {
                     assert($existingBefore !== null);
 
-                    $this->withTransaction(function () use ($id, $existingBefore, $type, $productId, $quantity): void {
-                        
-                        $this->products->applyInventoryForOrderLine(
-                            (string) ($existingBefore['type'] ?? ''),
-                            $existingBefore['product_id'],
-                            (int) ($existingBefore['quantity'] ?? 0),
-                            true,
-                        );
-                        
-                        $this->products->applyInventoryForOrderLine($type, $productId, $quantity, false);
-
-                        $updated = $this->orders->update($id, [
-                            'type' => $type,
-                            'product_id' => $productId,
-                            'quantity' => $quantity,
-                        ]);
-
-                        if (!$updated) {
-                            throw new \RuntimeException('Failed to update order.');
-                        }
-                    });
+                    $this->orders->updateWithInventory(
+                        $this->products,
+                        $id,
+                        $existingBefore,
+                        $type,
+                        $productId,
+                        $quantity,
+                    );
 
                     $this->setFlash('success', 'Order updated successfully.');
                     $this->redirect('/order');
@@ -260,7 +211,6 @@ final class OrderController extends BaseController
         ]);
     }
 
-    
     public function delete(string $id): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -274,17 +224,7 @@ final class OrderController extends BaseController
             if ($row === null) {
                 $this->setFlash('error', 'Order not found.');
             } else {
-                $this->withTransaction(function () use ($row, $id): void {
-                    $this->products->applyInventoryForOrderLine(
-                        (string) ($row['type'] ?? ''),
-                        $row['product_id'],
-                        (int) ($row['quantity'] ?? 0),
-                        true,
-                    );
-                    if (!$this->orders->delete($id)) {
-                        throw new \RuntimeException('Order not found.');
-                    }
-                });
+                $this->orders->deleteWithInventory($this->products, $id, $row);
                 $this->setFlash('success', 'Order deleted successfully.');
             }
         } catch (\Throwable $e) {

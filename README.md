@@ -15,7 +15,7 @@ MVC/
 ├── core/                   # Framework layer
 │   ├── Application.php
 │   ├── Container/Container.php
-│   ├── Database/Connection.php, Model.php, QueryBuilder.php
+│   ├── Database/ORM.php, Model.php, QueryBuilder.php
 │   ├── Http/Request.php, Response.php, Router.php, RouteMatcher.php, Dispatcher.php
 │   └── View/Engine.php
 ├── config/app.php, database.php
@@ -72,7 +72,7 @@ public/index.php
   → Core\Http\Dispatcher
   → App\Middleware\AuthMiddleware (when required)
   → App\Controllers\*
-  → App\Models\* (PDO / SQL)
+  → App\Models\* (ORM → MySQL)
   → Core\View\Engine → app/Views/*.php
 ```
 
@@ -88,11 +88,11 @@ public/index.php
 | Request | `core/Http/Request.php` | HTTP input |
 | Response | `core/Http/Response.php` | `redirect()`, `json()`, `html()` |
 | Engine | `core/View/Engine.php` | Render views, `$base` for links |
-| Connection | `core/Database/Connection.php` | PDO from config |
-| Model | `core/Database/Model.php` | Base class for app models |
+| ORM | `core/Database/ORM.php` | **Object-Relational Mapping** — PDO, `table()`, `model()`, `transaction()` |
+| Model | `core/Database/Model.php` | Base ORM model — each subclass sets `$table` (object ↔ table) |
 | QueryBuilder | `core/Database/QueryBuilder.php` | `from()`, `where()`, `get()`, `insert()`, `update()`, `delete()` |
 
-Controllers do not contain SQL. Models in `app/Models/` extend `Core\Database\Model` and use `query()` for database access.
+Controllers do not contain SQL. Models in `app/Models/` extend `Core\Database\Model`, declare `protected static string $table`, and use `$this->query()` (scoped to that table) via the ORM.
 
 **Dependency inversion:** `LoginController` and `ProductController` depend on `UserRepositoryInterface` and `ProductRepositoryInterface` (`app/Contracts/`). `Application::bootstrap()` binds those interfaces to `User` and `Product`.
 

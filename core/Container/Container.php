@@ -5,12 +5,14 @@ namespace Core\Container;
 
 use Closure;
 
-final class Container {
-
+final class Container
+{
     private array $bindings = [];
+
     private array $instances = [];
 
-    public function singleton(string $id, Closure $resolver): void {
+    public function singleton(string $id, Closure $resolver): void
+    {
         $this->bindings[$id] = function (self $container) use ($resolver, $id): object {
             if (!isset($this->instances[$id])) {
                 $this->instances[$id] = $resolver($container);
@@ -19,7 +21,7 @@ final class Container {
             return $this->instances[$id];
         };
     }
-    
+
     public function bind(string $id, Closure $resolver): void
     {
         $this->bindings[$id] = $resolver;

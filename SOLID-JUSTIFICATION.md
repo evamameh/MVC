@@ -4,6 +4,37 @@ This document explains how the five SOLID principles appear in **this repository
 
 ---
 
+## ORM — Object-Relational Mapping
+
+**ORM** maps **objects** (PHP model classes) to **relational** data (MySQL tables).
+
+| Layer | Class | Role |
+|-------|-------|------|
+| ORM | `Core\Database\ORM` | PDO from `config/database.php`; `table()`, `model()`, `transaction()` |
+| Model | `Core\Database\Model` | Base class; each app model sets `protected static string $table` |
+| Query | `Core\Database\QueryBuilder` | Fluent SQL (SELECT/INSERT/UPDATE/DELETE) |
+
+**Table mapping (object ↔ relation):**
+
+| Model (`app/Models/`) | Table (`inventory.sql`) |
+|------------------------|-------------------------|
+| `User` | `users` |
+| `Category` | `categories` |
+| `Supplier` | `suppliers` |
+| `Product` | `products` |
+| `Order` | `orders` |
+
+**Example:** `Product` uses `protected static string $table = 'products'`. Listing products runs through the ORM, not raw SQL in controllers:
+
+```php
+// App\Models\Product
+return $this->query()->orderBy('id', 'DESC')->get();
+```
+
+`Application::bootstrap()` creates `ORM::fromConfig($dbConfig)` and injects it into every model: `new Product($orm)`.
+
+---
+
 ## S — Single Responsibility
 
 Each class has one main job.
@@ -16,14 +47,14 @@ Each class has one main job.
 | `Core\Http\Request` | Wrap request method, path, and body |
 | `Core\Http\Response` | Send redirect / JSON / HTML |
 | `Core\View\Engine` | Render `app/Views` templates |
-| `Core\Database\Connection` | Provide PDO connection |
-| `Core\Database\Model` | Base model — shared `pdo()` and `query()` |
+| `Core\Database\ORM` | Object-Relational Mapping (PDO + queries + transactions) |
+| `Core\Database\Model` | Base ORM model — table mapping + `query()` |
 | `Core\Database\QueryBuilder` | Build SELECT/INSERT/UPDATE/DELETE |
 | `Core\Container\Container` | Dependency injection |
 | `App\Models\Product` | Product rules; uses QueryBuilder + PDO where needed |
 | `App\Controllers\ProductController` | HTTP for products only (no SQL in views) |
 
-**Example:** `ProductController::list()` calls `$this->products->findAll()` and `$this->render('product/list', ...)`. Data access is in `App\Models\Product` via `$this->query()->from('products')->...`; HTML is in `app/Views/product/list.php`.
+**Example:** `ProductController::list()` calls `$this->products->findAll()` and `$this->render('product/list', ...)`. Data access is in `App\Models\Product` via the ORM (`$this->query()->...` on table `products`); HTML is in `app/Views/product/list.php`.
 
 ---
 
@@ -91,7 +122,7 @@ Routes use `$container->get(ProductController::class)` from `routes/web.php`, so
 
 | Principle | Evidence in MVC project |
 |-----------|-------------------------|
-| **S** | Router/Dispatcher/Engine/Connection separate from models and controllers |
+| **S** | Router/Dispatcher/Engine/ORM separate from models and controllers |
 | **O** | New routes and controllers via config + container |
 | **L** | `Router` / `RouteMatcher`; models implement repository interfaces |
 | **I** | Separate user vs product contracts; focused middleware |
@@ -106,4 +137,4 @@ Routes use `$container->get(ProductController::class)` from `routes/web.php`, so
 
 Together they satisfy MVC separation and SOLID-oriented design for the final examination.
 
-*References: `core/Application.php`, `core/Container/Container.php`, `core/Http/Router.php`, `core/Http/Response.php`, `app/Contracts/ProductRepositoryInterface.php`, `app/Controllers/ProductController.php`, `app/Models/Product.php`, `routes/web.php`.*
+*References: `core/Database/ORM.php`, `core/Database/Model.php`, `core/Application.php`, `core/Container/Container.php`, `core/Http/Router.php`, `app/Contracts/ProductRepositoryInterface.php`, `app/Controllers/ProductController.php`, `app/Models/Product.php`, `routes/web.php`.*

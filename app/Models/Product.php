@@ -9,17 +9,8 @@ use PDO;
 
 final class Product extends Model implements ProductRepositoryInterface
 {
-    public function findAll(): array
-    {
-        return $this->query()->from('products')->orderBy('id', 'DESC')->get();
-    }
+    protected static string $table = 'products';
 
-    public function findById(int|string $id): ?array
-    {
-        return $this->query()->from('products')->where('id', $id)->first();
-    }
-
-    
     public function findByNameCategorySupplier(string $name, int|string $categoryId, int|string $supplierId): ?array
     {
         $name = trim($name);
@@ -47,14 +38,14 @@ final class Product extends Model implements ProductRepositoryInterface
 
     public function create(array $data): int|string
     {
-        if (!$this->existsInTable('categories', $data['category_id'])) {
+        if (!$this->relatedExists('categories', $data['category_id'])) {
             throw new \InvalidArgumentException('Invalid category_id: ' . $data['category_id']);
         }
-        if (!$this->existsInTable('suppliers', $data['supplier_id'])) {
+        if (!$this->relatedExists('suppliers', $data['supplier_id'])) {
             throw new \InvalidArgumentException('Invalid supplier_id: ' . $data['supplier_id']);
         }
 
-        return $this->query()->from('products')->insert([
+        return $this->query()->insert([
             'name' => $data['name'],
             'category_id' => $data['category_id'],
             'supplier_id' => $data['supplier_id'],
@@ -67,7 +58,7 @@ final class Product extends Model implements ProductRepositoryInterface
     {
         unset($data['id']);
 
-        return $this->query()->from('products')->where('id', $id)->update([
+        return $this->query()->where('id', $id)->update([
             'name' => $data['name'],
             'category_id' => $data['category_id'],
             'supplier_id' => $data['supplier_id'],
@@ -76,7 +67,6 @@ final class Product extends Model implements ProductRepositoryInterface
         ]);
     }
 
-    
     public function applyInventoryForOrderLine(string $type, int|string $productId, int $quantity, bool $reverse): void
     {
         if ($quantity <= 0) {
@@ -116,33 +106,12 @@ final class Product extends Model implements ProductRepositoryInterface
         }
     }
 
-    
     public function delete(int|string $id): bool
     {
-        $this->pdo()->beginTransaction();
-        try {
-            $this->query()->from('orders')->where('product_id', $id)->delete();
+        return $this->transaction(function () use ($id): bool {
+            $this->table('orders')->where('product_id', $id)->delete();
 
-            $ok = $this->query()->from('products')->where('id', $id)->delete();
-
-            $this->pdo()->commit();
-
-            return $ok;
-        } catch (\Throwable $e) {
-            if ($this->pdo()->inTransaction()) {
-                $this->pdo()->rollBack();
-            }
-            throw $e;
-        }
-    }
-
-    private function existsInTable(string $table, int|string $id): bool
-    {
-        $allowed = ['categories', 'suppliers'];
-        if (!in_array($table, $allowed, true)) {
-            return false;
-        }
-
-        return $this->query()->from($table)->where('id', $id)->count() > 0;
+            return $this->query()->where('id', $id)->delete();
+        });
     }
 }

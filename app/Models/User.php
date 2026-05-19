@@ -8,27 +8,23 @@ use Core\Database\Model;
 
 final class User extends Model implements UserRepositoryInterface
 {
+    protected static string $table = 'users';
+
     public function findByUsername(string $username): ?array
     {
-        return $this->query()->from('users')->where('username', $username)->first();
+        return $this->query()->where('username', $username)->first();
     }
 
-    public function findById(int|string $id): ?array
-    {
-        return $this->query()->from('users')->where('id', $id)->first();
-    }
-
-    
     public function findAllWithoutPasswords(): array
     {
-        return $this->query()->from('users')->select('id', 'username')->orderBy('id', 'DESC')->get();
+        return $this->query()->select('id', 'username')->orderBy('id', 'DESC')->get();
     }
 
     public function create(array $data): bool
     {
-        $this->query()->from('users')->insert([
+        $this->query()->insert([
             'username' => $data['username'],
-            'password' => $data['password'], 
+            'password' => $data['password'],
         ]);
 
         return true;
@@ -46,11 +42,6 @@ final class User extends Model implements UserRepositoryInterface
             return false;
         }
 
-        return $this->query()->from('users')->where('id', $id)->update($allowed);
-    }
-
-    public function delete(int|string $id): bool
-    {
-        return $this->query()->from('users')->where('id', $id)->delete();
+        return $this->query()->where('id', $id)->update($allowed);
     }
 }
