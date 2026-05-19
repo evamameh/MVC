@@ -1,0 +1,10 @@
+.comment-backup/
+strip-comments.php
+restore-comments.php
+
+/vendor/
+config/database.php
+
+.DS_Store
+Thumbs.db
+*.log

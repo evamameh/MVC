@@ -1,0 +1,7 @@
+# Public folder: tanan nga dili tinuod nga file/dir → padulong sa index.php (mao ni ang "sugod" sa app)
+RewriteEngine On
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+RewriteRule ^ index.php [QSA,L]
