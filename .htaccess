@@ -7,7 +7,7 @@ RewriteCond %{REQUEST_URI} ^/MVC/config(/|$) [NC]
 RewriteRule .* - [F,L]
 
 RewriteCond %{REQUEST_URI} ^/MVC/(app|core|routes|vendor)(/|$) [NC]
-RewriteRule .* /MVC/public/index.php/login [R=302,L]
+RewriteRule .* /MVC/public/dashboard [R=302,L]
 
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

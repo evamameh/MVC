@@ -2,5 +2,5 @@
 declare(strict_types=1);
 
 return [
-    'base_path' => '/MVC/public',
+    'base_path' => '',
 ];

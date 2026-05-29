@@ -1,140 +1,57 @@
-# SOLID Design Justification — MVC / InventoryCore
+# Design Notes
 
-This document explains how the five SOLID principles appear in **this repository** (`MVC` project: `core/` framework + `app/` application).
+This project is split into a framework layer and a task layer. The goal is to keep routing, rendering, and database work separate from the task rules themselves.
 
----
+## Why The Structure Is Split
 
-## ORM — Object-Relational Mapping
+The code is arranged so each file has one clear job:
 
-**ORM** maps **objects** (PHP model classes) to **relational** data (MySQL tables).
+- `Core\Application` builds the app and wires the objects together.
+- `Core\Http\Request` reads the request data in one place.
+- `Core\Http\Router` decides which route matches the URL.
+- `Core\Http\Dispatcher` runs the matched controller method.
+- `Core\View\Engine` renders a PHP file into HTML.
+- `Core\Database\Connection` wraps PDO.
+- `Core\Database\Model` acts as the shared base for app models.
+- `Core\Database\QueryBuilder` builds the SQL used by the models.
+- `App\Controllers\TaskController` handles create, edit, delete, and complete actions.
+- `App\Models\Task` handles the `tasks` table.
+- `App\Contracts\TaskRepositoryContract` keeps the controller dependent on task behavior instead of a hard-coded class.
 
-| Layer | Class | Role |
-|-------|-------|------|
-| ORM | `Core\Database\ORM` | PDO from `config/database.php`; `table()`, `model()`, `transaction()` |
-| Model | `Core\Database\Model` | Base class; each app model sets `protected static string $table` |
-| Query | `Core\Database\QueryBuilder` | Fluent SQL (SELECT/INSERT/UPDATE/DELETE) |
+## How The Principles Appear In The Code
 
-**Table mapping (object ↔ relation):**
+### Single Responsibility
+Each core class does one thing. The controller handles task flow, the model handles persistence, the view engine renders templates, and the router only matches routes.
 
-| Model (`app/Models/`) | Table (`inventory.sql`) |
-|------------------------|-------------------------|
-| `User` | `users` |
-| `Category` | `categories` |
-| `Supplier` | `suppliers` |
-| `Product` | `products` |
-| `Order` | `orders` |
+### Open/Closed
+New routes can be added in `routes/web.php` without rewriting the router or dispatcher. New models can extend `Core\Database\Model` and use the same query layer.
 
-**Example:** `Product` uses `protected static string $table = 'products'`. Listing products runs through the ORM, not raw SQL in controllers:
+### Liskov Substitution
+`TaskController` depends on the task contract, so any class that follows the same task methods can be swapped in without changing the controller logic.
 
-```php
-// App\Models\Product
-return $this->query()->orderBy('id', 'DESC')->get();
-```
+### Interface Segregation
+The task contract only includes the methods the controller actually needs: list, find, create, update, delete, and complete.
 
-`Application::bootstrap()` creates `ORM::fromConfig($dbConfig)` and injects it into every model: `new Product($orm)`.
+### Dependency Inversion
+High-level code does not build low-level classes inside the controller. `Core\Application` creates the objects and passes them into the controller.
 
----
+## Database Layer
 
-## S — Single Responsibility
+The model and query builder work together:
+- `Task` extends `Model`
+- `Model` calls `Connection`
+- `Connection` returns `QueryBuilder`
+- `QueryBuilder` runs the SQL
 
-Each class has one main job.
+That is why the controller does not contain raw SQL.
 
-| Class | Responsibility |
-|-------|----------------|
-| `Core\Http\Router` | Match HTTP method and URI to a route |
-| `Core\Http\RouteMatcher` | Router matching logic (used by `Router`) |
-| `Core\Http\Dispatcher` | Run middleware, then the route handler |
-| `Core\Http\Request` | Wrap request method, path, and body |
-| `Core\Http\Response` | Send redirect / JSON / HTML |
-| `Core\View\Engine` | Render `app/Views` templates |
-| `Core\Database\ORM` | Object-Relational Mapping (PDO + queries + transactions) |
-| `Core\Database\Model` | Base ORM model — table mapping + `query()` |
-| `Core\Database\QueryBuilder` | Build SELECT/INSERT/UPDATE/DELETE |
-| `Core\Container\Container` | Dependency injection |
-| `App\Models\Product` | Product rules; uses QueryBuilder + PDO where needed |
-| `App\Controllers\ProductController` | HTTP for products only (no SQL in views) |
+## Defense Point
 
-**Example:** `ProductController::list()` calls `$this->products->findAll()` and `$this->render('product/list', ...)`. Data access is in `App\Models\Product` via the ORM (`$this->query()->...` on table `products`); HTML is in `app/Views/product/list.php`.
+If asked why the project is organized this way, the short answer is:
 
----
-
-## O — Open / Closed
-
-You can extend behaviour without changing core routing code.
-
-- New routes → add rows in `routes/web.php` only.
-- New controller → register in `Core\Application::bootstrap()` with `$container->bind(...)`.
-- New entity → new `App\Controllers\*`, `App\Models\*`, and views under `app/Views/`.
-
-`Dispatcher` and `RouteMatcher` stay the same when you add features.
-
----
-
-## L — Liskov Substitution
-
-Subtypes must work wherever the parent type is expected.
-
-- `Router` extends `RouteMatcher` and is used by `Dispatcher` wherever a matcher is needed.
-- `User` implements `UserRepositoryInterface`; controllers type-hint the interface and receive `User` from the container.
-- `Product` implements `ProductRepositoryInterface` the same way.
-
----
-
-## I — Interface Segregation
-
-Classes should not depend on methods they never use.
-
-- `App\Contracts\UserRepositoryInterface` — user methods only.
-- `App\Contracts\ProductRepositoryInterface` — product CRUD only.
-- `CategoryController` only receives `Category`, not `Product` or `Order`.
-- `AuthMiddleware` only exposes auth checks (`requireSession`, `ensureStarted`).
-
----
-
-## D — Dependency Inversion
-
-High-level code does not create low-level objects with `new` inside controllers.
-
-1. **`Core\Container\Container`** stores how to build each class.
-
-2. **`Core\Application::bootstrap()`** wires dependencies, for example:
-
-```php
-$container->singleton(ProductRepositoryInterface::class,
-    static fn (Container $c): ProductRepositoryInterface => $c->get(Product::class));
-
-$container->bind(ProductController::class, static fn (Container $c): ProductController =>
-    new ProductController(
-        $c->get(Engine::class),
-        $c->get(ProductRepositoryInterface::class),
-        $c->get(Category::class),
-        $c->get(Supplier::class),
-    ));
-```
-
-3. **`ProductController`** constructor type-hints `ProductRepositoryInterface`, not `Product` directly.
-
-Routes use `$container->get(ProductController::class)` from `routes/web.php`, so controllers are resolved through the container.
-
----
-
-## Summary table
-
-| Principle | Evidence in MVC project |
-|-----------|-------------------------|
-| **S** | Router/Dispatcher/Engine/ORM separate from models and controllers |
-| **O** | New routes and controllers via config + container |
-| **L** | `Router` / `RouteMatcher`; models implement repository interfaces |
-| **I** | Separate user vs product contracts; focused middleware |
-| **D** | Container + interface bindings + constructor injection |
-
----
-
-## Conclusion
-
-- **Framework (`core/`):** HTTP, routing, views, DI.
-- **Application (`app/`):** InventoryCore business logic.
-
-Together they satisfy MVC separation and SOLID-oriented design for the final examination.
-
-*References: `core/Database/ORM.php`, `core/Database/Model.php`, `core/Application.php`, `core/Container/Container.php`, `core/Http/Router.php`, `app/Contracts/ProductRepositoryInterface.php`, `app/Controllers/ProductController.php`, `app/Models/Product.php`, `routes/web.php`.*
+- the framework code is in `core/`
+- the task logic is in `app/`
+- the route file decides the URL flow
+- the controller handles validation and redirects
+- the model and query builder handle database work
+- the view engine handles page output

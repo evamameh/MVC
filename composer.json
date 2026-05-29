@@ -1,6 +1,6 @@
 {
-    "name": "inventorycore/inventory-core",
-    "description": "InventoryCore — custom PHP MVC (Core) + inventory MVP (App)",
+    "name": "my-mvc-framework/my-mvc-framework",
+    "description": "My MVC Framework - custom PHP MVC framework with task management MVP application",
     "type": "project",
     "license": "proprietary",
     "require": {

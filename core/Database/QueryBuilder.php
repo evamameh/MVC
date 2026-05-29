@@ -7,142 +7,94 @@ use PDO;
 
 final class QueryBuilder
 {
-    private string $table = '';           
-    private array $wheres = [];           
-    private string $orderColumn = '';
-    private string $orderDirection = 'ASC';
-    private array $columns = ['*'];       
-    private PDO $pdo;
+    private array $wheres = [];
 
-    public function __construct(PDO $pdo)
-    {
-        $this->pdo = $pdo;
+    private string $orderBy = '';
+
+    public function __construct(
+        private PDO $pdo,
+        private string $table
+    ) {
+        $this->checkName($table);
     }
 
-    public function from(string $table): self
+    public function where(string $column, string|int|float|null $value): self
     {
-        $copy = clone $this;
-        $copy->table = $table;
-        $copy->wheres = [];
-        $copy->orderColumn = '';
-        $copy->columns = ['*'];
+        $this->checkName($column);
+        $this->wheres[$column] = $value;
 
-        return $copy;
+        return $this;
     }
 
-    public function select(string ...$columns): self
-    {
-        $copy = clone $this;
-        $copy->columns = $columns === [] ? ['*'] : $columns;
-
-        return $copy;
-    }
-
-    public function where(string $column, mixed $value): self
-    {
-        $copy = clone $this;
-        $copy->wheres[$column] = $value;
-
-        return $copy;
-    }
-    
     public function orderBy(string $column, string $direction = 'ASC'): self
     {
-        $copy = clone $this;
-        $copy->orderColumn = $column;
-        $copy->orderDirection = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
+        $this->checkName($column);
+        $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
+        $this->orderBy = "{$column} {$direction}";
 
-        return $copy;
+        return $this;
     }
-    
+
     public function get(): array
     {
-        $sql = $this->buildSelectSql();
-        $stmt = $this->pdo->prepare($sql);
+        $stmt = $this->pdo->prepare($this->selectSql());
         $stmt->execute($this->wheres);
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
+
     public function first(): ?array
     {
-        $sql = $this->buildSelectSql() . ' LIMIT 1';
-        $stmt = $this->pdo->prepare($sql);
+        $stmt = $this->pdo->prepare($this->selectSql() . ' LIMIT 1');
         $stmt->execute($this->wheres);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         return $row === false ? null : $row;
     }
 
-    public function count(): int
+    public function insert(array $data): int
     {
-        $sql = "SELECT COUNT(*) FROM {$this->table}";
-        $params = [];
-        if ($this->wheres !== []) {
-            $parts = [];
-            foreach ($this->wheres as $col => $val) {
-                $parts[] = "{$col} = :{$col}";
-                $params[$col] = $val;
-            }
-            $sql .= ' WHERE ' . join(' AND ', $parts);
-        }
+        $columns = $this->columns($data);
+        $placeholders = array_map(fn (string $column): string => ':' . $column, $columns);
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-
-        return (int) $stmt->fetchColumn();
-    }
-
-    public function insert(array $data): int|string
-    {
-        $cols = array_keys($data);
-        $placeholders = array_map(static fn (string $c): string => ':' . $c, $cols);
         $sql = sprintf(
             'INSERT INTO %s (%s) VALUES (%s)',
             $this->table,
-            join(', ', $cols),
-            join(', ', $placeholders),
+            implode(', ', $columns),
+            implode(', ', $placeholders)
         );
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($data);
+        $this->pdo->prepare($sql)->execute($data);
 
-        return $this->pdo->lastInsertId();
+        return (int) $this->pdo->lastInsertId();
     }
-    
+
     public function update(array $data): bool
     {
         if ($this->wheres === []) {
             return false;
         }
 
-        $setParts = [];
-        foreach (array_keys($data) as $col) {
-            $setParts[] = "{$col} = :set_{$col}";
+        $columns = $this->columns($data);
+        $set = array_map(fn (string $column): string => "{$column} = :set_{$column}", $columns);
+        $where = $this->whereSql('where_');
+
+        $params = [];
+        foreach ($data as $column => $value) {
+            $params['set_' . $column] = $value;
         }
-        $whereParts = [];
-        foreach (array_keys($this->wheres) as $col) {
-            $whereParts[] = "{$col} = :where_{$col}";
+        foreach ($this->wheres as $column => $value) {
+            $params['where_' . $column] = $value;
         }
 
         $sql = sprintf(
             'UPDATE %s SET %s WHERE %s',
             $this->table,
-            join(', ', $setParts),
-            join(' AND ', $whereParts),
+            implode(', ', $set),
+            $where
         );
 
-        $params = [];
-        foreach ($data as $col => $val) {
-            $params['set_' . $col] = $val;
-        }
-        foreach ($this->wheres as $col => $val) {
-            $params['where_' . $col] = $val;
-        }
-
-        $stmt = $this->pdo->prepare($sql);
-
-        return $stmt->execute($params);
+        return $this->pdo->prepare($sql)->execute($params);
     }
 
     public function delete(): bool
@@ -151,36 +103,56 @@ final class QueryBuilder
             return false;
         }
 
-        $parts = [];
-        foreach (array_keys($this->wheres) as $col) {
-            $parts[] = "{$col} = :{$col}";
-        }
-        $sql = sprintf('DELETE FROM %s WHERE %s', $this->table, join(' AND ', $parts));
-        $stmt = $this->pdo->prepare($sql);
+        $sql = sprintf(
+            'DELETE FROM %s WHERE %s',
+            $this->table,
+            $this->whereSql()
+        );
 
-        return $stmt->execute($this->wheres);
+        return $this->pdo->prepare($sql)->execute($this->wheres);
     }
 
-    private function buildSelectSql(): string
+    private function selectSql(): string
     {
-        if ($this->table === '') {
-            throw new \RuntimeException('QueryBuilder: table not set. Call from("table_name") first.');
-        }
-
-        $sql = 'SELECT ' . join(', ', $this->columns) . ' FROM ' . $this->table;
+        $sql = 'SELECT * FROM ' . $this->table;
 
         if ($this->wheres !== []) {
-            $parts = [];
-            foreach (array_keys($this->wheres) as $col) {
-                $parts[] = "{$col} = :{$col}";
-            }
-            $sql .= ' WHERE ' . join(' AND ', $parts);
+            $sql .= ' WHERE ' . $this->whereSql();
         }
 
-        if ($this->orderColumn !== '') {
-            $sql .= ' ORDER BY ' . $this->orderColumn . ' ' . $this->orderDirection;
+        if ($this->orderBy !== '') {
+            $sql .= ' ORDER BY ' . $this->orderBy;
         }
 
         return $sql;
+    }
+
+    private function whereSql(string $prefix = ''): string
+    {
+        $parts = [];
+
+        foreach (array_keys($this->wheres) as $column) {
+            $parts[] = "{$column} = :{$prefix}{$column}";
+        }
+
+        return implode(' AND ', $parts);
+    }
+
+    private function columns(array $data): array
+    {
+        $columns = array_map('strval', array_keys($data));
+
+        foreach ($columns as $column) {
+            $this->checkName($column);
+        }
+
+        return $columns;
+    }
+
+    private function checkName(string $name): void
+    {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) !== 1) {
+            throw new \InvalidArgumentException('Invalid SQL name: ' . $name);
+        }
     }
 }

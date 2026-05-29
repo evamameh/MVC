@@ -5,7 +5,6 @@ namespace Core\Http;
 
 final class Response
 {
-    
     public static function html(string $body, int $statusCode = 200): never
     {
         http_response_code($statusCode);
@@ -14,16 +13,6 @@ final class Response
         exit;
     }
 
-    
-    public static function json(array $data, int $statusCode = 200): never
-    {
-        http_response_code($statusCode);
-        header('Content-Type: application/json; charset=utf-8');
-        echo json_encode($data, JSON_THROW_ON_ERROR);
-        exit;
-    }
-
-    
     public static function redirect(string $url, int $statusCode = 302): never
     {
         http_response_code($statusCode);
