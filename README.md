@@ -1,134 +1,92 @@
-# MVC — InventoryCore
+# My MVC Framework
 
-Custom PHP 8.3 MVC framework (**Core**) plus **InventoryCore** MVP (**App**): inventory with products, categories, suppliers, orders, and users.
+This project is a custom PHP MVC application for managing tasks. It uses object-oriented PHP, a custom router and dispatcher, a lightweight database layer, and PSR-4 autoloading through Composer.
 
-## Project structure
+## What It Does
 
+- creates tasks
+- shows tasks on the dashboard
+- edits task details
+- deletes tasks
+- marks a task as completed
+
+## Main Parts
+
+- `app/` holds the task code
+- `core/` holds the framework code
+- `routes/` defines which URL goes to which controller method
+- `config/` stores app and database settings
+- `public/` is the entry point
+- `task_manager.sql` contains the database schema
+
+## How The Request Flow Works
+
+1. `public/index.php` loads Composer autoload.
+2. `Core\Application` creates the core objects.
+3. `routes/web.php` returns the available routes.
+4. `Core\Http\Router` finds the matching route.
+5. `Core\Http\Dispatcher` calls the controller method.
+6. `App\Controllers\TaskController` handles the task action.
+7. `App\Models\Task` talks to the database through the model layer.
+8. `Core\View\Engine` renders the PHP view file.
+
+## Framework Layer
+
+- `Core\Http\Request` normalizes the request path and method
+- `Core\Http\Router` matches the URL pattern
+- `Core\Http\Dispatcher` invokes the controller action
+- `Core\Container\Container` stores registered objects
+- `Core\Database\Connection` creates the PDO connection
+- `Core\Database\Model` provides the shared model behavior
+- `Core\Database\QueryBuilder` builds the SQL statements
+- `Core\View\Engine` loads the views
+
+## App Layer
+
+- `TaskController` validates input and controls the task flow
+- `Task` saves and fetches records from the `tasks` table
+- `TaskRepositoryContract` defines the task operations the controller expects
+
+## Database
+
+The app uses a `tasks` table with:
+- `id`
+- `project_name`
+- `title`
+- `due_date`
+- `status`
+
+## Routes
+
+- `GET /` -> dashboard
+- `GET /dashboard` -> dashboard
+- `GET /task` -> task list
+- `GET /task/create` -> create form
+- `POST /task/create` -> save task
+- `GET /task/edit/{id}` -> edit form
+- `POST /task/edit/{id}` -> update task
+- `GET /task/delete/{id}` -> delete confirmation
+- `POST /task/delete/{id}` -> delete task
+- `POST /task/complete/{id}` -> mark completed
+
+## Run
+
+1. Install dependencies:
+
+```bash
+composer install
 ```
-MVC/
-├── app/                    # Application layer (MVP)
-│   ├── Controllers/
-│   ├── Contracts/        # Repository interfaces (DIP)
-│   ├── Models/
-│   ├── Views/
-│   └── Middleware/
-├── core/                   # Framework layer
-│   ├── Application.php
-│   ├── Container/Container.php
-│   ├── Database/ORM.php, Model.php, QueryBuilder.php
-│   ├── Http/Request.php, Response.php, Router.php, RouteMatcher.php, Dispatcher.php
-│   └── View/Engine.php
-├── config/app.php, database.php
-├── public/index.php        # Front controller
-├── routes/web.php
-├── inventory.sql
-├── composer.json
-├── README.md
-└── SOLID-JUSTIFICATION.md
+
+2. Start the built-in PHP server:
+
+```bash
+php -S localhost:8080 -t public
 ```
 
-## Requirements
+3. Open the app in the browser:
 
-- PHP **8.3+**
-- Composer
-- MySQL / MariaDB
-
-## Setup
-
-1. Open the project folder **`MVC`** (e.g. `C:\jspec2a03\phpsite\MVC`).
-
-2. Install dependencies:
-
-   ```bash
-   cd MVC
-   composer install
-   ```
-
-3. Import the database:
-
-   ```bash
-   mysql -u root -p < inventory.sql
-   ```
-
-4. Edit `config/database.php` (host, database, username, password).
-
-5. Edit `config/app.php`:
-
-   - `base_path` → `/MVC/public` (match your local URL)
-
-6. Run in browser:
-
-   `http://localhost:8080/MVC/public/index.php/login`
-
-7. Register at `/register`, then login.
-
-## Request flow
-
-```
-public/index.php
-  → vendor/autoload.php (PSR-4: Core\, App\)
-  → Core\Application::bootstrap()
-  → routes/web.php
-  → Core\Http\Dispatcher
-  → App\Middleware\AuthMiddleware (when required)
-  → App\Controllers\*
-  → App\Models\* (ORM → MySQL)
-  → Core\View\Engine → app/Views/*.php
+```text
+http://localhost:8080/
 ```
 
-## Framework design
-
-| Class | File | Role |
-|-------|------|------|
-| Application | `core/Application.php` | Bootstrap, DI container, run app |
-| Container | `core/Container/Container.php` | `bind`, `singleton`, `get` |
-| Router | `core/Http/Router.php` | Match method + path (`{id}` params) |
-| RouteMatcher | `core/Http/RouteMatcher.php` | Router implementation (regex matching) |
-| Dispatcher | `core/Http/Dispatcher.php` | Middleware + call controller |
-| Request | `core/Http/Request.php` | HTTP input |
-| Response | `core/Http/Response.php` | `redirect()`, `json()`, `html()` |
-| Engine | `core/View/Engine.php` | Render views, `$base` for links |
-| ORM | `core/Database/ORM.php` | **Object-Relational Mapping** — PDO, `table()`, `model()`, `transaction()` |
-| Model | `core/Database/Model.php` | Base ORM model — each subclass sets `$table` (object ↔ table) |
-| QueryBuilder | `core/Database/QueryBuilder.php` | `from()`, `where()`, `get()`, `insert()`, `update()`, `delete()` |
-
-Controllers do not contain SQL. Models in `app/Models/` extend `Core\Database\Model`, declare `protected static string $table`, and use `$this->query()` (scoped to that table) via the ORM.
-
-**Dependency inversion:** `LoginController` and `ProductController` depend on `UserRepositoryInterface` and `ProductRepositoryInterface` (`app/Contracts/`). `Application::bootstrap()` binds those interfaces to `User` and `Product`.
-
-## MVP (InventoryCore)
-
-- Login, register, logout
-- Dashboard
-- Products, categories, suppliers, orders (CRUD)
-- User admin (`/userlist`)
-
-## Routes (from `routes/web.php`)
-
-Base: `/MVC/public/index.php`
-
-**Public:** `GET/POST /login`, `GET/POST /register`, `GET /logout`
-
-**HTML (login required):**
-
-- `/dashboard`, `/products`, `/product/add`, `/product/edit/{id}`, `POST /product/delete/{id}`
-- `/category`, `/category/add`, `/category/edit/{id}`, `POST /category/delete/{id}`
-- `/supplier`, `/supplier/add`, `/supplier/edit/{id}`, `POST /supplier/delete/{id}`
-- `/order`, `/order/add`, `/order/edit/{id}`, `POST /order/delete/{id}`
-- `/userlist`, `/userlist/create`, `/user/edit/{id}`, `POST /userlist/delete/{id}`
-
-## PSR-4 (`composer.json`)
-
-- `Core\` → `core/`
-- `App\` → `app/`
-
-Only `public/index.php` uses `require` for autoload.
-
-## Deliverables
-
-- [x] Custom MVC framework
-- [x] MVP CRUD application
-- [x] `composer.json`
-- [x] `README.md`
-- [x] `SOLID-JUSTIFICATION.md`
-- [ ] GitHub private repo + evaluator (submit yourself)
+4. If the page does not load, make sure you are running the command from the project root folder.
